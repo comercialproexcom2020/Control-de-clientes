@@ -12,9 +12,8 @@ permissions:
   contents: read
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'push' && 'production' || inputs.entorno }}
+    environment: ${{ inputs.entorno }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -42,7 +41,7 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Falta CLOUDFLARE_API_TOKEN'; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Falta CLOUDFLARE_ACCOUNT_ID'; exit 1; }
       - name: Deploy Cloudflare Worker
-        run: pnpm exec wrangler deploy --env "${{ github.event_name == 'push' && 'production' || inputs.entorno }}"
+        run: pnpm exec wrangler deploy --env "${{ inputs.entorno }}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

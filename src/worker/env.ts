@@ -1,7 +1,4 @@
-export interface Env {
-  DB: D1Database;
-  ASSETS: Fetcher;
+export interface Env extends Cloudflare.Env {
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUD: string;
-  APP_ENV?: string;
 }

@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const destino = process.argv[2] ?? 'local';
 const baseDatos = {
@@ -15,6 +17,8 @@ if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
 
 const valor = email.replaceAll("'", "''");
 const sql = `INSERT INTO usuarios (email, rol, activo) VALUES ('${valor}', 'admin', 1) ON CONFLICT(email) DO UPDATE SET rol = 'admin', activo = 1;`;
-const args = ['exec', 'wrangler', 'd1', 'execute', baseDatos[0], ...baseDatos[1], '--command', sql];
-const resultado = spawnSync('pnpm', args, { stdio: 'inherit', shell: process.platform === 'win32' });
+const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
+const wrangler = join(raiz, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
+const args = ['d1', 'execute', baseDatos[0], ...baseDatos[1], '--command', sql];
+const resultado = spawnSync(process.execPath, [wrangler, ...args], { cwd: raiz, stdio: 'inherit' });
 if (resultado.status !== 0) process.exit(resultado.status ?? 1);

@@ -4,13 +4,13 @@ Aplicación para PROEXCOM. La interfaz está en español de Colombia y el despli
 
 ## Estado
 
-Estructura inicial de la Fase 1. Incluye el esquema D1, validación criptográfica del JWT de Access, protección por rol, una pantalla inicial conectada al resumen y pruebas de reglas de fechas. Los datos de negocio y despliegues no se configuran hasta recibir los valores reales.
+La primera versión de la Fase 1 está implementada y validada localmente. Las bases D1 remotas de staging y producción ya existen y tienen el esquema inicial aplicado; ambas permanecen vacías. El despliegue del Worker espera la configuración de Cloudflare Access.
 
 ## Requisitos
 
 - Node.js 22 o superior y pnpm.
 - Cuenta Cloudflare con Workers, D1 y Zero Trust/Access.
-- Cuenta GitHub y repositorio privado para activar CI/CD.
+- Cuenta GitHub; el repositorio actual es público, así que no se deben guardar secretos ni datos de negocio en el código.
 
 ## Desarrollo local
 
@@ -38,31 +38,23 @@ La app depende de que el hostname de Workers esté protegido por la aplicación 
 
 `migrations/0001_init.sql` crea las tablas, índices y una protección de base de datos contra UPDATE/DELETE de la bitácora. Cada entorno tiene su propia base D1.
 
-1. Crea dos bases D1: `control-clientes-staging` y `control-clientes-production`.
-2. Sustituye `REEMPLAZAR_CON_ID_D1_STAGING` y `REEMPLAZAR_CON_ID_D1_PRODUCTION` en `wrangler.jsonc` por los IDs entregados por Cloudflare. Estos identificadores no son secretos.
-3. Aplica las migraciones:
-
-```powershell
-pnpm db:migrate:local
-pnpm db:migrate:staging
-pnpm db:migrate:production
-```
-
-4. Define `FIRST_ADMIN_EMAIL` en la sesión de PowerShell y ejecuta el seed idempotente:
+1. Las bases `control-clientes-staging` y `control-clientes-production` están creadas. Sus IDs están registrados en `wrangler.jsonc`; no son secretos.
+2. La migración inicial está aplicada en ambas. No se han cargado clientes, servidores, equipos, SIM ni licencias.
+3. El usuario administrador inicial ya está provisionado en staging y producción con el correo de la cuenta Cloudflare autenticada. Agrégalo a la política Allow de Cloudflare Access. Para provisionar otro correo en el futuro:
 
 ```powershell
 $env:FIRST_ADMIN_EMAIL = 'admin@tu-dominio.com'
-pnpm seed:admin:local
-# Cambia local por staging o production cuando corresponda.
+pnpm seed:admin:staging
+pnpm seed:admin:production
 ```
 
 El seed solo añade o reactiva ese correo con rol `admin`; no incluye contraseñas ni tokens. Agrega también ese correo a la política Allow de Cloudflare Access.
 
 ## GitHub Actions y despliegue
 
-Configura en el repositorio privado los secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID`. El token necesita permisos de Workers Scripts, D1 y acceso a la cuenta adecuada. Protege `main` y exige que pase el workflow CI. El workflow de despliegue publica producción al hacer push/merge a `main`; staging se puede desplegar manualmente desde Actions.
+Configura en el repositorio los secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` con permisos limitados a los recursos necesarios. El workflow CI corre en los cambios; el despliegue es manual desde Actions para elegir staging o producción y validar primero los secretos. No publiques credenciales en el repositorio público.
 
-Antes del primer despliegue confirma los IDs D1, las variables `ACCESS_TEAM_DOMAIN` y `ACCESS_AUD`, y el dominio con Access activo. Nunca guardes el API token en Git, `.dev.vars`, `wrangler.jsonc` ni en variables públicas del frontend.
+Antes del primer despliegue configura una aplicación Cloudflare Access para el hostname elegido, carga `ACCESS_TEAM_DOMAIN` y `ACCESS_AUD` como secrets del Worker, habilita el correo del primer admin en su política Allow y configura los secretos de GitHub Actions. Nunca guardes el API token en Git, `.dev.vars`, `wrangler.jsonc` ni en variables públicas del frontend.
 
 ## Comandos
 

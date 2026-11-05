@@ -2,7 +2,12 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "control-clientes-poc",
   "main": "src/worker/index.ts",
-  "compatibility_date": "2026-11-04",
+  "compatibility_date": "2026-11-05",
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "head_sampling_rate": 1 },
+    "traces": { "enabled": true, "head_sampling_rate": 0.01 }
+  },
   "assets": {
     "directory": "./dist/",
     "binding": "ASSETS",
@@ -22,14 +27,14 @@
       "name": "control-clientes-staging",
       "vars": { "APP_ENV": "staging" },
       "d1_databases": [
-        { "binding": "DB", "database_name": "control-clientes-staging", "database_id": "REEMPLAZAR_CON_ID_D1_STAGING", "migrations_dir": "migrations" }
+        { "binding": "DB", "database_name": "control-clientes-staging", "database_id": "1495dcd6-254e-45e6-a5a7-184806ef4a1f", "migrations_dir": "migrations" }
       ]
     },
     "production": {
       "name": "control-clientes-production",
       "vars": { "APP_ENV": "production" },
       "d1_databases": [
-        { "binding": "DB", "database_name": "control-clientes-production", "database_id": "REEMPLAZAR_CON_ID_D1_PRODUCTION", "migrations_dir": "migrations" }
+        { "binding": "DB", "database_name": "control-clientes-production", "database_id": "f46cbb9a-1912-420a-81eb-db202e6ef342", "migrations_dir": "migrations" }
       ]
     }
   }
