@@ -1,7 +1,5 @@
 name: Deploy
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       entorno:
@@ -31,6 +29,18 @@ jobs:
       - run: pnpm lint
       - run: pnpm test
       - run: pnpm build
+      - name: Validate Cloudflare deployment configuration
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if grep -q 'REEMPLAZAR_CON_ID_D1_' wrangler.jsonc; then
+            echo 'Completa los IDs de D1 en wrangler.jsonc antes del despliegue.'
+            exit 1
+          fi
+          test -n "$CLOUDFLARE_API_TOKEN" || { echo 'Falta CLOUDFLARE_API_TOKEN'; exit 1; }
+          test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo 'Falta CLOUDFLARE_ACCOUNT_ID'; exit 1; }
       - name: Deploy Cloudflare Worker
         run: pnpm exec wrangler deploy --env "${{ github.event_name == 'push' && 'production' || inputs.entorno }}"
         env:
