@@ -1,0 +1,36 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "control-clientes-poc",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-11-04",
+  "assets": {
+    "directory": "./dist/",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "control-clientes-local",
+      "database_id": "local-database-id",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "env": {
+    "staging": {
+      "name": "control-clientes-staging",
+      "vars": { "APP_ENV": "staging" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "control-clientes-staging", "database_id": "REEMPLAZAR_CON_ID_D1_STAGING", "migrations_dir": "migrations" }
+      ]
+    },
+    "production": {
+      "name": "control-clientes-production",
+      "vars": { "APP_ENV": "production" },
+      "d1_databases": [
+        { "binding": "DB", "database_name": "control-clientes-production", "database_id": "REEMPLAZAR_CON_ID_D1_PRODUCTION", "migrations_dir": "migrations" }
+      ]
+    }
+  }
+}

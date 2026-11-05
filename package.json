@@ -1,0 +1,46 @@
+{
+  "name": "control-clientes-poc",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"vite --host 0.0.0.0\" \"wrangler dev --port 8787\"",
+    "build": "vite build",
+    "deploy:staging": "npm run build && wrangler deploy --env staging",
+    "deploy:production": "npm run build && wrangler deploy --env production",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "seed:admin:local": "node scripts/seed-admin.mjs local",
+    "seed:admin:staging": "node scripts/seed-admin.mjs staging",
+    "seed:admin:production": "node scripts/seed-admin.mjs production",
+    "db:migrate:local": "wrangler d1 migrations apply control-clientes-local --local",
+    "db:migrate:staging": "wrangler d1 migrations apply control-clientes-staging --remote --env staging",
+    "db:migrate:production": "wrangler d1 migrations apply control-clientes-production --remote --env production"
+  },
+  "dependencies": {
+    "hono": "^4.10.4",
+    "jose": "^6.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261104.1",
+    "@cloudflare/vitest-plugin": "^1.5.1",
+    "@eslint/js": "^9.39.1",
+    "@tailwindcss/vite": "^4.1.17",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@typescript-eslint/parser": "^8.46.3",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.1",
+    "tailwindcss": "^4.1.17",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.2",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.45.0"
+  }
+}
