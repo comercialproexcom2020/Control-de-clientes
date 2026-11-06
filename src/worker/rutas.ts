@@ -166,6 +166,75 @@ app.get('/servidores', async (c) => {
 app.get('/servidores/:id', async (c) => { const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400); const dato = await obtener(c, 'servidores', id, 'id, nombre, host, puerto, plataforma, ubicacion, capacidad, notas, activo, creado_en, actualizado_en'); return dato ? c.json(dato) : c.json({ error: 'No encontrado', detalle: 'El servidor no existe.' }, 404); });
 app.post('/servidores', soloEscritura, async (c) => crear(c, 'servidores', 'servidor', servidorSchema, await c.req.json()));
 app.patch('/servidores/:id', soloEscritura, async (c) => { const id = idRuta(c); return id ? editar(c, 'servidores', 'servidor', id, servidorSchema.partial() as z.ZodType<Datos>, await c.req.json()) : c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400); });
+app.post('/eliminar-grupo', soloAdmin, async (c) => {
+  const schema = z.object({ entidad: z.enum(['clientes','equipos','sims','licencias','servidores']), ids: z.array(idSchema).min(1).max(25) }).strict();
+  const cuerpo = parsear(schema, await c.req.json());
+  if (!cuerpo || new Set(cuerpo.ids).size !== cuerpo.ids.length) return c.json({ error: 'Solicitud inválida', detalle: 'Selecciona hasta 25 registros sin repetir.' }, 400);
+  const marks = cuerpo.ids.map(() => '?').join(',');
+  const db = c.env.DB; const comandos: D1PreparedStatement[] = [];
+  let eliminados = 0; let desactivados = 0; let equiposAsociados = 0; let simsAsociadas = 0; let licenciasAsociadas = 0;
+  try {
+    if (cuerpo.entidad === 'clientes') {
+      const r = await db.prepare(`SELECT id,nombre,(SELECT COUNT(*) FROM equipos e WHERE e.cliente_id=c.id) AS equipos,(SELECT COUNT(*) FROM sims sm WHERE sm.cliente_id=c.id OR sm.equipo_id IN (SELECT e.id FROM equipos e WHERE e.cliente_id=c.id)) AS sims,(SELECT COUNT(*) FROM licencias l WHERE l.cliente_id=c.id OR l.equipo_id IN (SELECT e.id FROM equipos e WHERE e.cliente_id=c.id) OR l.sim_id IN (SELECT sm.id FROM sims sm WHERE sm.cliente_id=c.id OR sm.equipo_id IN (SELECT e.id FROM equipos e WHERE e.cliente_id=c.id))) AS licencias FROM clientes c WHERE id IN (${marks})`).bind(...cuerpo.ids).all<Datos>();
+      const filas = r.results ?? [];
+      if (filas.length !== cuerpo.ids.length) return c.json({ error: 'No encontrado', detalle: 'Uno o más clientes seleccionados ya no existen. Actualiza la lista.' }, 404);
+      equiposAsociados = filas.reduce((n, x) => n + Number(x.equipos ?? 0), 0);
+      simsAsociadas = filas.reduce((n, x) => n + Number(x.sims ?? 0), 0);
+      licenciasAsociadas = filas.reduce((n, x) => n + Number(x.licencias ?? 0), 0);
+      for (const fila of filas) {
+        const nombre = String(fila.nombre);
+        comandos.push(db.prepare(`INSERT INTO bitacora (usuario,entidad,entidad_id,accion,detalle) SELECT ?, 'equipo',id,'eliminar',? FROM equipos WHERE cliente_id=?`).bind(usuarioActual(c).email, `Eliminado al borrar el cliente ${nombre}.`, fila.id));
+        comandos.push(db.prepare(`INSERT INTO bitacora (usuario,entidad,entidad_id,accion,detalle) SELECT ?, 'sim',id,'eliminar',? FROM sims WHERE cliente_id=? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id=?)`).bind(usuarioActual(c).email, `Eliminado al borrar el cliente ${nombre}.`, fila.id, fila.id));
+        comandos.push(db.prepare(`INSERT INTO bitacora (usuario,entidad,entidad_id,accion,detalle) SELECT ?, 'licencia',id,'eliminar',? FROM licencias WHERE cliente_id=? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id=?) OR sim_id IN (SELECT id FROM sims WHERE cliente_id=? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id=?))`).bind(usuarioActual(c).email, `Eliminado al borrar el cliente ${nombre}.`, fila.id, fila.id, fila.id, fila.id));
+        comandos.push(bitacora(c, 'cliente', Number(fila.id), 'eliminar', `Se eliminó el cliente ${nombre} y sus registros: ${Number(fila.equipos ?? 0)} equipos, ${Number(fila.sims ?? 0)} SIM y ${Number(fila.licencias ?? 0)} licencias.`));
+        comandos.push(db.prepare('DELETE FROM licencias WHERE cliente_id = ? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id = ?) OR sim_id IN (SELECT id FROM sims WHERE cliente_id = ? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id = ?))').bind(fila.id, fila.id, fila.id, fila.id));
+        comandos.push(db.prepare('DELETE FROM sims WHERE cliente_id = ? OR equipo_id IN (SELECT id FROM equipos WHERE cliente_id = ?)').bind(fila.id, fila.id));
+        comandos.push(db.prepare('DELETE FROM equipos WHERE cliente_id = ?').bind(fila.id));
+        comandos.push(db.prepare('DELETE FROM clientes WHERE id = ?').bind(fila.id));
+      }
+      eliminados = filas.length;
+    } else if (cuerpo.entidad === 'equipos') {
+      const r = await db.prepare(`SELECT id,COALESCE(nombre,imei,serial,'Equipo '||id) AS etiqueta FROM equipos WHERE id IN (${marks})`).bind(...cuerpo.ids).all<Datos>();
+      const filas = r.results ?? [];
+      if (filas.length !== cuerpo.ids.length) return c.json({ error: 'No encontrado', detalle: 'Uno o más equipos seleccionados ya no existen. Actualiza la lista.' }, 404);
+      for (const fila of filas) {
+        comandos.push(bitacora(c, 'equipo', Number(fila.id), 'eliminar', `Se eliminó el equipo ${String(fila.etiqueta)}. Las licencias vinculadas quedaron sin equipo y las SIM asignadas volvieron a inventario.`));
+        comandos.push(db.prepare("UPDATE sims SET equipo_id=NULL,estado=CASE WHEN estado='En uso' THEN 'Inventario' ELSE estado END,actualizado_en=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE equipo_id=?").bind(fila.id));
+        comandos.push(db.prepare('DELETE FROM equipos WHERE id = ?').bind(fila.id));
+      }
+      eliminados = filas.length;
+    } else if (cuerpo.entidad === 'sims') {
+      const r = await db.prepare(`SELECT id,iccid FROM sims WHERE id IN (${marks})`).bind(...cuerpo.ids).all<Datos>();
+      const filas = r.results ?? [];
+      if (filas.length !== cuerpo.ids.length) return c.json({ error: 'No encontrado', detalle: 'Una o más SIM seleccionadas ya no existen. Actualiza la lista.' }, 404);
+      for (const fila of filas) { comandos.push(bitacora(c, 'sim', Number(fila.id), 'eliminar', `Se eliminó la SIM ${String(fila.iccid)}; cualquier licencia asociada quedó sin SIM.`)); comandos.push(db.prepare('DELETE FROM sims WHERE id = ?').bind(fila.id)); }
+      eliminados = filas.length;
+    } else if (cuerpo.entidad === 'licencias') {
+      const r = await db.prepare(`SELECT id,COALESCE(proveedor,producto) AS etiqueta FROM licencias WHERE id IN (${marks})`).bind(...cuerpo.ids).all<Datos>();
+      const filas = r.results ?? [];
+      if (filas.length !== cuerpo.ids.length) return c.json({ error: 'No encontrado', detalle: 'Una o más licencias seleccionadas ya no existen. Actualiza la lista.' }, 404);
+      for (const fila of filas) { comandos.push(bitacora(c, 'licencia', Number(fila.id), 'eliminar', `Se eliminó la licencia ${String(fila.etiqueta)} y su historial de renovaciones.`)); comandos.push(db.prepare('DELETE FROM licencias WHERE id = ?').bind(fila.id)); }
+      eliminados = filas.length;
+    } else {
+      const r = await db.prepare(`SELECT s.id,s.nombre,(SELECT COUNT(*) FROM equipos e WHERE e.servidor_id=s.id) AS equipos,(SELECT COUNT(*) FROM clientes c WHERE c.servidor_id=s.id) AS clientes FROM servidores s WHERE s.id IN (${marks})`).bind(...cuerpo.ids).all<Datos>();
+      const filas = r.results ?? [];
+      if (filas.length !== cuerpo.ids.length) return c.json({ error: 'No encontrado', detalle: 'Uno o más servidores seleccionados ya no existen. Actualiza la lista.' }, 404);
+      for (const fila of filas) {
+        const e = Number(fila.equipos ?? 0); const cl = Number(fila.clientes ?? 0); const nombre = String(fila.nombre);
+        const conRelaciones = e + cl > 0;
+        if (conRelaciones) { comandos.push(db.prepare("UPDATE servidores SET activo=0,actualizado_en=strftime('%Y-%m-%dT%H:%M:%SZ','now') WHERE id=?").bind(fila.id)); desactivados++; }
+        else { comandos.push(db.prepare('DELETE FROM servidores WHERE id=?').bind(fila.id)); eliminados++; }
+        comandos.push(bitacora(c, 'servidor', Number(fila.id), conRelaciones ? 'desactivar' : 'eliminar', conRelaciones ? `Se desactivó el servidor ${nombre}; conserva ${e} equipos y ${cl} clientes asociados.` : `Se eliminó el servidor ${nombre}.`));
+      }
+    }
+    await db.batch(comandos);
+  } catch (error) {
+    console.error('No se completó el borrado solicitado', error);
+    return c.json({ error: 'No se pudo completar', detalle: 'La operación se revirtió; no se borró ningún registro. Actualiza la lista e inténtalo de nuevo.' }, 409);
+  }
+  const aviso = cuerpo.entidad === 'clientes' ? `También se eliminaron ${equiposAsociados} equipos, ${simsAsociadas} SIM y ${licenciasAsociadas} licencias asociadas.` : undefined;
+  return c.json({ mensaje: cuerpo.entidad === 'servidores' ? `Se eliminaron ${eliminados} servidores y se desactivaron ${desactivados} con registros asociados.` : `Se eliminaron ${eliminados} ${cuerpo.entidad}.`, aviso });
+});
 app.delete('/servidores/:id', soloAdmin, async (c) => {
   const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400);
   const registro = await c.env.DB.prepare('SELECT nombre FROM servidores WHERE id = ?').bind(id).first<{ nombre: string }>();
@@ -386,22 +455,32 @@ app.post('/licencias/:id/renovar', soloEscritura, async (c) => {
 });
 
 app.get('/bitacora', async (c) => {
-  const { pagina, limite, inicio } = listaParams(new URL(c.req.url)); const params = new URL(c.req.url).searchParams;
+  const { pagina, limite, inicio, q } = listaParams(new URL(c.req.url)); const params = new URL(c.req.url).searchParams;
   const condiciones: string[] = []; const valores: unknown[] = [];
   const entidad = params.get('entidad');
-  if (entidad) { const validado = z.enum(['cliente','equipo','sim','licencia','servidor','sistema']).safeParse(entidad); if (!validado.success) return c.json({ error: 'Filtro inválido', detalle: 'La entidad no es válida.' }, 400); condiciones.push('entidad = ?'); valores.push(validado.data); }
+  if (entidad) { const validado = z.enum(['cliente','equipo','sim','licencia','servidor','sistema']).safeParse(entidad); if (!validado.success) return c.json({ error: 'Filtro inválido', detalle: 'La entidad no es válida.' }, 400); condiciones.push('b.entidad = ?'); valores.push(validado.data); }
   const usuario = params.get('usuario');
-  if (usuario) { const validado = z.email().safeParse(usuario); if (!validado.success) return c.json({ error: 'Filtro inválido', detalle: 'El correo no tiene un formato válido.' }, 400); condiciones.push('usuario = ?'); valores.push(validado.data.toLowerCase()); }
-  for (const campo of ['entidad_id'] as const) { const valor = params.get(campo); if (valor) { const n = parsear(idSchema, valor); if (!n) return c.json({ error: 'Filtro inválido', detalle: 'El identificador debe ser un entero positivo.' }, 400); condiciones.push(`${campo} = ?`); valores.push(n); } }
+  if (usuario) { const validado = z.email().safeParse(usuario); if (!validado.success) return c.json({ error: 'Filtro inválido', detalle: 'El correo no tiene un formato válido.' }, 400); condiciones.push('b.usuario = ?'); valores.push(validado.data.toLowerCase()); }
+  const accion = params.get('accion');
+  if (accion) { const validado = z.string().trim().min(1).max(60).regex(/^[a-z_]+$/).safeParse(accion); if (!validado.success) return c.json({ error: 'Filtro inválido', detalle: 'La acción no es válida.' }, 400); condiciones.push('b.accion = ?'); valores.push(validado.data); }
+  for (const campo of ['entidad_id'] as const) { const valor = params.get(campo); if (valor) { const n = parsear(idSchema, valor); if (!n) return c.json({ error: 'Filtro inválido', detalle: 'El identificador debe ser un entero positivo.' }, 400); condiciones.push(`b.${campo} = ?`); valores.push(n); } }
+  if (q) { condiciones.push(`(b.usuario LIKE ? OR b.entidad LIKE ? OR b.accion LIKE ? OR b.detalle LIKE ? OR CAST(b.entidad_id AS TEXT) LIKE ? OR c.nombre LIKE ? OR cc.nombre LIKE ? OR e.nombre LIKE ? OR e.imei LIKE ? OR e.serial LIKE ? OR sm.iccid LIKE ? OR l.proveedor LIKE ? OR s.nombre LIKE ? OR s.host LIKE ?)`); for (let i = 0; i < 14; i++) valores.push(`%${q}%`); }
   const desde = params.get('desde'); const hasta = params.get('hasta');
   for (const [campo, valor] of [['desde', desde], ['hasta', hasta]] as const) {
-    if (valor !== null) { if (!validarFechaISO(valor)) return c.json({ error: 'Filtro inválido', detalle: `La fecha ${campo} debe usar el formato AAAA-MM-DD.` }, 400); condiciones.push(`date(ts) ${campo === 'desde' ? '>=' : '<='} date(?)`); valores.push(valor); }
+    if (valor !== null) { if (!validarFechaISO(valor)) return c.json({ error: 'Filtro inválido', detalle: `La fecha ${campo} debe usar el formato AAAA-MM-DD.` }, 400); condiciones.push(`date(b.ts) ${campo === 'desde' ? '>=' : '<='} date(?)`); valores.push(valor); }
   }
   if (desde && hasta && desde > hasta) return c.json({ error: 'Filtro inválido', detalle: 'La fecha inicial no puede ser posterior a la fecha final.' }, 400);
   const where = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
+  const tablas = `FROM bitacora b
+    LEFT JOIN clientes c ON b.entidad = 'cliente' AND c.id = b.entidad_id
+    LEFT JOIN equipos e ON b.entidad = 'equipo' AND e.id = b.entidad_id
+    LEFT JOIN sims sm ON b.entidad = 'sim' AND sm.id = b.entidad_id
+    LEFT JOIN licencias l ON b.entidad = 'licencia' AND l.id = b.entidad_id
+    LEFT JOIN servidores s ON b.entidad = 'servidor' AND s.id = b.entidad_id
+    LEFT JOIN clientes cc ON cc.id = COALESCE(e.cliente_id, sm.cliente_id, l.cliente_id)`;
   const [datos, total] = await Promise.all([
-    c.env.DB.prepare(`SELECT id, ts, usuario, entidad, entidad_id, accion, detalle FROM bitacora ${where} ORDER BY ts DESC, id DESC LIMIT ? OFFSET ?`).bind(...valores, limite, inicio).all(),
-    c.env.DB.prepare(`SELECT COUNT(*) AS total FROM bitacora ${where}`).bind(...valores).first<{ total: number }>(),
+    c.env.DB.prepare(`SELECT b.id,b.ts,b.usuario,b.entidad,b.entidad_id,b.accion,b.detalle,COALESCE(c.nombre,cc.nombre) AS cliente,CASE b.entidad WHEN 'cliente' THEN c.nombre WHEN 'equipo' THEN COALESCE(e.nombre,e.imei,e.serial,'Equipo ' || b.entidad_id) WHEN 'sim' THEN sm.iccid WHEN 'licencia' THEN COALESCE(l.proveedor,l.producto) WHEN 'servidor' THEN COALESCE(s.nombre,s.host) ELSE 'Sistema' END AS registro ${tablas} ${where} ORDER BY b.ts DESC,b.id DESC LIMIT ? OFFSET ?`).bind(...valores, limite, inicio).all<Datos>(),
+    c.env.DB.prepare(`SELECT COUNT(*) AS total ${tablas} ${where}`).bind(...valores).first<{ total: number }>(),
   ]);
   return c.json({ datos: datos.results ?? [], pagina, limite, total: total?.total ?? 0 });
 });

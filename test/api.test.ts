@@ -72,6 +72,22 @@ describe('API principal', () => {
     expect(sims?.total).toBe(1);
   });
 
+  it('permite borrar equipos individualmente o por selección y deja rastro en bitácora', async () => {
+    const sufijo = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+    const ids: number[] = [];
+    for (const nombre of [`Equipo borrar A ${sufijo}`, `Equipo borrar B ${sufijo}`]) {
+      const r = await pedir('/equipos', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, nombre }) });
+      expect(r.status).toBe(201);
+      ids.push(Number((await r.json() as { id: number }).id));
+    }
+    const borrado = await pedir('/eliminar-grupo', { method: 'POST', body: JSON.stringify({ entidad: 'equipos', ids }) });
+    expect(borrado.status, await borrado.clone().text()).toBe(200);
+    const restantes = await testEnv.DB.prepare(`SELECT COUNT(*) AS total FROM equipos WHERE id IN (?,?)`).bind(...ids).first<{ total: number }>();
+    expect(restantes?.total).toBe(0);
+    const eventos = await testEnv.DB.prepare(`SELECT COUNT(*) AS total FROM bitacora WHERE entidad='equipo' AND entidad_id IN (?,?) AND accion='eliminar'`).bind(...ids).first<{ total: number }>();
+    expect(eventos?.total).toBe(2);
+  });
+
   it('asigna SIM de inventario, completa el cliente y rechaza SIM dañada', async () => {
     const equipoRespuesta = await pedir('/equipos', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, nombre: `Radio ${crypto.randomUUID()}` }) });
     expect(equipoRespuesta.status).toBe(201);

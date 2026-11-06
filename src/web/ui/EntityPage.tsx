@@ -36,8 +36,8 @@ const configuraciones: Record<string, Config> = {
   },
   bitacora: {
     endpoint: '/bitacora', title: 'Bitácora', description: 'Historial de cambios hechos en el sistema.', fields: [],
-    filters: [{ key: 'entidad', label: 'Entidad', type: 'select', options: ['cliente','equipo','sim','licencia','servidor','sistema'] }, { key: 'desde', label: 'Desde', type: 'date' }, { key: 'hasta', label: 'Hasta', type: 'date' }],
-    columns: [{ key: 'ts', label: 'Fecha y hora' }, { key: 'usuario', label: 'Usuario' }, { key: 'entidad', label: 'Registro' }, { key: 'accion', label: 'Acción' }, { key: 'detalle', label: 'Detalle' }],
+    filters: [{ key: 'entidad', label: 'Tipo de registro', type: 'select', options: ['cliente','equipo','sim','licencia','servidor','sistema'] }, { key: 'accion', label: 'Acción', type: 'select', options: ['crear','editar','eliminar','desactivar','renovar','mover','asignar','importar','alta_integral'] }, { key: 'desde', label: 'Desde', type: 'date' }, { key: 'hasta', label: 'Hasta', type: 'date' }],
+    columns: [{ key: 'ts', label: 'Fecha y hora' }, { key: 'usuario', label: 'Usuario' }, { key: 'entidad', label: 'Tipo' }, { key: 'cliente', label: 'Cliente' }, { key: 'registro', label: 'Elemento' }, { key: 'accion', label: 'Acción' }, { key: 'detalle', label: 'Detalle' }],
   },
 };
 
@@ -60,6 +60,7 @@ export default function EntityPage({ section, rol, initialValues = {}, initialFi
   const [historial, setHistorial] = useState<{ registro: Datos; renovaciones: Datos[] } | null>(null);
   const [fichaCliente, setFichaCliente] = useState<{ cliente: Datos; equipos: Datos[]; sims: Datos[]; licencias: Datos[]; bitacora: Datos[] } | null>(null);
   const [choices, setChoices] = useState<Record<string, Datos[]>>({});
+  const [seleccionados, setSeleccionados] = useState<number[]>([]);
 
   async function cargar() {
     if (!config) return;
@@ -76,6 +77,7 @@ export default function EntityPage({ section, rol, initialValues = {}, initialFi
   }
 
   useEffect(() => { void cargar(); }, [section, q, filtros, pagina]);
+  useEffect(() => { setSeleccionados([]); }, [section, q, filtros, pagina, datos]);
   useEffect(() => {
     if (!config) return;
     const urls = [...new Set([...config.fields, ...(config.filters ?? [])].flatMap((f) => f.source ? [f.source.url] : []))];
@@ -171,12 +173,13 @@ export default function EntityPage({ section, rol, initialValues = {}, initialFi
     setRenovando(null); setError(''); await cargar();
   }
 
-  async function eliminarRegistro(fila: Datos) {
-    if (!window.confirm(`¿Deseas eliminar este registro de ${config.title.toLocaleLowerCase('es-CO')}?`)) return;
-    const r = await fetch(`/api${config.endpoint}/${fila.id}`, { method: 'DELETE' });
-    const j = await r.json() as { detalle?: string; mensaje?: string };
+  async function eliminarRegistros(ids: number[]) {
+    const advertencia = section === 'clientes' ? ' También se borrarán sus equipos, SIM y licencias asociadas.' : section === 'servidores' ? ' Los servidores asociados a equipos o clientes solo se desactivarán.' : '';
+    if (!window.confirm(`¿Confirmas eliminar ${ids.length === 1 ? 'este registro' : `estos ${ids.length} registros`} de ${config.title.toLocaleLowerCase('es-CO')}?${advertencia}`)) return;
+    const r = await fetch('/api/eliminar-grupo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entidad: section, ids }) });
+    const j = await r.json() as { detalle?: string; mensaje?: string; aviso?: string };
     if (!r.ok) { setError(j.detalle ?? 'No se pudo eliminar el registro.'); return; }
-    setError(j.mensaje ?? 'Registro actualizado.'); await cargar();
+    setSeleccionados([]); setError([j.mensaje, j.aviso].filter(Boolean).join(' ')); await cargar();
   }
 
   function recalcularVencimiento(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
@@ -195,14 +198,15 @@ export default function EntityPage({ section, rol, initialValues = {}, initialFi
 
   const columnas = config.columns.filter((col) => rol === 'admin' || !['precio','pagada','costo_mensual'].includes(col.key));
   const mostrarAcciones = section === 'clientes' || section === 'licencias' || (rol !== 'lector' && section !== 'bitacora');
-  const totalColumnas = columnas.length + (mostrarAcciones ? 1 : 0);
+  const puedeEliminar = rol === 'admin' && ['clientes','equipos','sims','licencias','servidores'].includes(section);
+  const totalColumnas = columnas.length + (mostrarAcciones ? 1 : 0) + (puedeEliminar ? 1 : 0);
 
   return <section className="entity-page">
     <div className="welcome"><div><div className="eyebrow">GESTIÓN OPERATIVA</div><h1>{config.title}</h1><p>{config.description}</p></div>{section !== 'bitacora' && rol !== 'lector' && <button className="primary" onClick={() => { setEditando(null); setModal(true); }}>＋ <span>Nuevo registro</span></button>}</div>
-    <div className="list-toolbar"><label className="search"><span>⌕</span><input aria-label="Buscar" placeholder={`Buscar en ${config.title.toLocaleLowerCase('es-CO')}…`} value={q} onChange={(e) => { setPagina(1); setQ(e.target.value); }} /></label><div className="filter-controls">{config.filters?.map((filter) => filter.type === 'date' ? <label className="date-filter" key={filter.key}><span>{filter.label}</span><input type="date" aria-label={filter.label} value={filtros[filter.key] ?? ''} onChange={(e) => { setPagina(1); setFiltros((actual) => ({ ...actual, [filter.key]: e.target.value })); }} /></label> : <select key={filter.key} aria-label={filter.label} value={filtros[filter.key] ?? ''} onChange={(e) => { setPagina(1); setFiltros((actual) => ({ ...actual, [filter.key]: e.target.value })); }}><option value="">{filter.label}: todos</option>{filter.options?.map((option) => <option key={option} value={option}>{filter.key === 'activo' ? (option === '1' ? 'Activos' : 'Inactivos') : option}</option>)}{filter.source && choices[filter.source.url]?.map((opt) => <option key={String(opt.id)} value={String(opt[filter.source!.value])}>{String(opt[filter.source!.label])}</option>)}</select>)}</div><span className="record-count">{total} registros</span></div>
+    <div className="list-toolbar"><label className="search"><span>⌕</span><input aria-label="Buscar" placeholder={`Buscar en ${config.title.toLocaleLowerCase('es-CO')}…`} value={q} onChange={(e) => { setPagina(1); setQ(e.target.value); }} /></label><div className="filter-controls">{config.filters?.map((filter) => filter.type === 'date' ? <label className="date-filter" key={filter.key}><span>{filter.label}</span><input type="date" aria-label={filter.label} value={filtros[filter.key] ?? ''} onChange={(e) => { setPagina(1); setFiltros((actual) => ({ ...actual, [filter.key]: e.target.value })); }} /></label> : <select key={filter.key} aria-label={filter.label} value={filtros[filter.key] ?? ''} onChange={(e) => { setPagina(1); setFiltros((actual) => ({ ...actual, [filter.key]: e.target.value })); }}><option value="">{filter.label}: todos</option>{filter.options?.map((option) => <option key={option} value={option}>{filter.key === 'activo' ? (option === '1' ? 'Activos' : 'Inactivos') : option}</option>)}{filter.source && choices[filter.source.url]?.map((opt) => <option key={String(opt.id)} value={String(opt[filter.source!.value])}>{String(opt[filter.source!.label])}</option>)}</select>)}</div>{puedeEliminar && seleccionados.length > 0 && <button className="delete-action" onClick={() => void eliminarRegistros(seleccionados)}>Eliminar selección ({seleccionados.length})</button>}<span className="record-count">{total} registros</span></div>
     {error && <div className="notice"><span>ⓘ</span><div><b>{error.includes('Access') || error.includes('habilitado') ? 'Acceso pendiente' : 'No se pudo completar'}</b><p>{error}</p></div></div>}
-    <div className="table-wrap"><table><thead><tr>{columnas.map((col) => <th key={col.key}>{col.label}</th>)}{mostrarAcciones && <th>Acciones</th>}</tr></thead><tbody>
-      {cargando ? <tr><td colSpan={totalColumnas} className="table-empty">Cargando registros…</td></tr> : datos.length ? datos.map((row, i) => <tr key={String(row.id ?? i)}>{columnas.map((col) => {
+    <div className="table-wrap"><table><thead><tr>{puedeEliminar && <th><input aria-label="Seleccionar todos los registros visibles" type="checkbox" checked={datos.length > 0 && datos.every((row) => seleccionados.includes(Number(row.id)))} onChange={(e) => setSeleccionados(e.target.checked ? datos.map((row) => Number(row.id)) : [])} /></th>}{columnas.map((col) => <th key={col.key}>{col.label}</th>)}{mostrarAcciones && <th>Acciones</th>}</tr></thead><tbody>
+      {cargando ? <tr><td colSpan={totalColumnas} className="table-empty">Cargando registros…</td></tr> : datos.length ? datos.map((row, i) => <tr key={String(row.id ?? i)}>{puedeEliminar && <td><input aria-label={`Seleccionar registro ${String(row.id)}`} type="checkbox" checked={seleccionados.includes(Number(row.id))} onChange={(e) => setSeleccionados((actuales) => e.target.checked ? [...actuales, Number(row.id)] : actuales.filter((id) => id !== Number(row.id)))} /></td>}{columnas.map((col) => {
         let value = row[col.key];
         if (col.key === 'cliente_id' && value) value = choices['/clientes']?.find((r) => String(r.id) === String(value))?.nombre ?? value;
         if (col.key === 'servidor_id' && value) value = choices['/servidores']?.find((r) => String(r.id) === String(value))?.nombre ?? value;
@@ -211,7 +215,7 @@ export default function EntityPage({ section, rol, initialValues = {}, initialFi
         if (col.key === 'pagada') value = value === 1 ? 'Pagada' : 'Pendiente';
         if (col.key === 'capacidad' && value !== null && value !== undefined) value = `${String(row.equipos ?? 0)} / ${String(value)}`;
         return <td key={col.key}>{value === null || value === undefined || value === '' ? '—' : String(value)}</td>;
-      })}{mostrarAcciones && <td className="row-actions">{section === 'clientes' && <button className="edit-action" onClick={() => void abrirFicha(row)}>Ficha</button>}{section === 'licencias' && <button className="edit-action" onClick={() => void abrirHistorial(row)}>Historial</button>}{rol !== 'lector' && <>{section === 'equipos' && <button className="edit-action" onClick={() => void abrirAsignacion(row)}>SIM</button>}{section === 'licencias' && <button className="edit-action" onClick={() => setRenovando(row)}>Renovar</button>}{section === 'servidores' && <button className="edit-action" onClick={() => void abrirTraslado(row)}>Mover equipos</button>}<button className="edit-action" onClick={() => { setEditando(row); setModal(true); }}>Editar</button>{rol === 'admin' && ['clientes','servidores'].includes(section) && <button className="delete-action" onClick={() => void eliminarRegistro(row)}>Eliminar</button>}</>}</td>}</tr>) : <tr><td colSpan={totalColumnas} className="table-empty"><b>{error ? 'No se pudieron cargar los registros' : 'Aún no hay registros'}</b><span>{error || (section === 'bitacora' ? 'Los movimientos se irán registrando aquí.' : 'Crea el primer registro para comenzar.')}</span></td></tr>}
+      })}{mostrarAcciones && <td className="row-actions">{section === 'clientes' && <button className="edit-action" onClick={() => void abrirFicha(row)}>Ficha</button>}{section === 'licencias' && <button className="edit-action" onClick={() => void abrirHistorial(row)}>Historial</button>}{rol !== 'lector' && <>{section === 'equipos' && <button className="edit-action" onClick={() => void abrirAsignacion(row)}>SIM</button>}{section === 'licencias' && <button className="edit-action" onClick={() => setRenovando(row)}>Renovar</button>}{section === 'servidores' && <button className="edit-action" onClick={() => void abrirTraslado(row)}>Mover equipos</button>}<button className="edit-action" onClick={() => { setEditando(row); setModal(true); }}>Editar</button></>}</td>}{puedeEliminar && <td><button className="delete-action" onClick={() => void eliminarRegistros([Number(row.id)])}>Eliminar</button></td>}</tr>) : <tr><td colSpan={totalColumnas} className="table-empty"><b>{error ? 'No se pudieron cargar los registros' : 'Aún no hay registros'}</b><span>{error || (section === 'bitacora' ? 'Los movimientos se irán registrando aquí.' : 'Crea el primer registro para comenzar.')}</span></td></tr>}
     </tbody></table></div>
     {total > 25 && <div className="pagination"><button disabled={pagina <= 1} onClick={() => setPagina((p) => Math.max(1, p - 1))}>← Anterior</button><span>Página {pagina} de {Math.max(1, Math.ceil(total / 25))}</span><button disabled={pagina >= Math.ceil(total / 25)} onClick={() => setPagina((p) => p + 1)}>Siguiente →</button></div>}
     {modal && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) { setModal(false); setEditando(null); } }}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title"><div className="modal-head"><div><h2 id="modal-title">{editando ? 'Editar registro' : 'Nuevo registro'}</h2><p>{config.title}</p></div><button className="close" aria-label="Cerrar" onClick={() => { setModal(false); setEditando(null); }}>×</button></div><form onSubmit={(e) => void enviar(e)}><div className="form-grid">{config.fields.filter((f) => !((f.key === 'precio' || f.key === 'pagada' || f.key === 'costo_mensual') && rol !== 'admin')).map((field) => {
