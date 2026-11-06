@@ -240,7 +240,7 @@ export default function ServiciosPage({ rol, initialValues = {}, clearInitial = 
         </div><p className="integration-hint">Puedes vender esta licencia sin registrar ni asociar equipo o SIM.</p></fieldset>}
       </section>
       {clientes.length > 0 && <section className="integration-card customer-picker"><div className="integration-title"><span>↳</span><div><h2>Clientes registrados</h2><p>Selecciona uno para agregarle equipo, SIM o licencia en este mismo formulario.</p></div></div><div className="customer-picker-list">{clientes.slice(0, 8).map((c) => <button type="button" key={String(c.id)} className={clienteId === String(c.id) && modoCliente === 'existente' ? 'chosen' : ''} onClick={() => { if (String(c.id) !== clienteId) { setEquipoNuevoId(null); setSimNuevaId(null); } setModoCliente('existente'); setClienteId(String(c.id)); }}><b>{String(c.nombre)}</b><small>{String(c.responsable_comercial ?? 'Responsable pendiente')} · {String(c.equipos ?? 0)} equipos · {String(c.sims ?? 0)} SIM</small></button>)}</div></section>}
-      <div className="integration-submit"><span>{rol === 'lector' ? 'Tu rol permite consultar, pero no agregar registros.' : 'Al guardar, se crean juntos los registros que marcaste.'}</span><button className="primary" disabled={guardando || rol === 'lector'}>{guardando ? 'Guardando…' : 'Guardar cliente y servicios'}</button></div>
+      <div className="integration-submit"><span>{rol === 'lector' ? 'Tu rol permite consultar, pero no agregar registros.' : 'Todo se registra desde este formulario y queda asociado al cliente.'}</span><button className="primary" disabled={guardando || rol === 'lector'}>{guardando ? 'Guardando…' : 'Guardar cliente y servicios'}</button></div>
     </form>
   </div>;
 }
