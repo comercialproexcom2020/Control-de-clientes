@@ -96,6 +96,7 @@ CREATE TABLE servidores (
 CREATE TABLE clientes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nombre TEXT NOT NULL,
+  responsable_comercial TEXT NOT NULL,
   nit TEXT, contacto TEXT, telefono TEXT, email TEXT,
   ciudad TEXT, direccion TEXT,
   servidor_id INTEGER REFERENCES servidores(id) ON DELETE SET NULL, -- servidor por defecto (opcional)
@@ -322,7 +323,7 @@ La app solo **copia** el texto o abre `https://wa.me/57{telefono}?text=...`. No 
 
 ## 9. Importación y exportación
 
-- **Importar SIM (CSV pegado o archivo):** columnas `iccid, operador, estado, cliente, fecha_activacion, notas`. Mostrar **vista previa** con errores por fila (ICCID duplicado, operador inválido) antes de confirmar. Nada se guarda hasta confirmar. Una sola entrada de bitácora resumen ("Importadas 21 SIM").
+- **Importar inventario desde CSV UTF-8:** un archivo por cliente. Mostrar **vista previa** con errores por fila (IMEI/ICCID duplicado, operador o fecha inválidos) antes de confirmar. Nada se guarda hasta confirmar. Asociar clientes a un responsable comercial; agrupar servidores por la pareja `host + puerto`, y enlazar equipo y SIM de cada fila. Ignorar credenciales de acceso y datos no modelados. Registrar una sola entrada de bitácora resumen.
 - **Exportar a Excel (.xlsx):** una hoja por tabla (servidores, clientes, equipos, SIM, licencias, renovaciones, bitácora). El admin ve precios; los demás roles, no.
 - **Reporte por cliente:** página HTML con estilos de impresión (Imprimir → PDF) con datos del cliente, equipos con su SIM y su `servidor:puerto`, licencias y vencimientos.
 

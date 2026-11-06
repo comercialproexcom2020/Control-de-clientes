@@ -2,8 +2,10 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { requiereRoles, usuarioActual, type AuthEnv } from './auth';
 import { baseRenovacion, hoyEnBogota, estadoLicencia, sumarDiasCalendario, sumarMesesCalendario, validarFechaISO } from './fechas';
+import importar from './importar';
 
 const app = new Hono<AuthEnv>();
+app.route('/', importar);
 const soloEscritura = requiereRoles('admin', 'editor');
 const soloAdmin = requiereRoles('admin');
 const mesesSchema = z.union([z.literal(1), z.literal(3), z.literal(6), z.literal(12), z.literal(24)]);
@@ -16,7 +18,7 @@ const fechaRequerida = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(validarFec
 const puertoSchema = z.string().trim().regex(/^\d{1,5}$/).refine((valor) => Number(valor) >= 1 && Number(valor) <= 65535);
 
 const servidorSchema = z.object({ nombre: z.string().trim().min(1).max(120), host: z.string().trim().min(1).max(255), puerto: puertoSchema, plataforma: texto(120), ubicacion: texto(160), capacidad: entero, notas: texto(2000), activo: z.coerce.number().int().min(0).max(1).optional() }).strict();
-const clienteSchema = z.object({ nombre: z.string().trim().min(1).max(160), nit: texto(40), contacto: texto(160), telefono: texto(40), email: z.union([z.email(), z.literal('')]).nullable().optional(), ciudad: texto(100), direccion: texto(240), servidor_id: numeroId, notas: texto(2000), activo: z.coerce.number().int().min(0).max(1).optional() }).strict();
+const clienteSchema = z.object({ nombre: z.string().trim().min(1).max(160), nit: texto(40), contacto: texto(160), telefono: texto(40), email: z.union([z.email(), z.literal('')]).nullable().optional(), ciudad: texto(100), direccion: texto(240), responsable_comercial: z.string().trim().min(1).max(160), servidor_id: numeroId, notas: texto(2000), activo: z.coerce.number().int().min(0).max(1).optional() }).strict();
 const equipoSchema = z.object({ cliente_id: numeroId, nombre: texto(80), marca: texto(100), modelo: texto(100), imei: texto(40), serial: texto(80), estado: z.enum(['Activo','En bodega','Dañado','Reemplazar','Baja']).optional(), fecha_envio: fecha, servidor_id: numeroId, notas: texto(2000) }).strict();
 const simSchema = z.object({ iccid: z.string().trim().min(5).max(30), operador: z.enum(['Tigo','Claro','Movistar']).nullable().optional(), numero_linea: texto(40), estado: z.enum(['Inventario','En uso','Dañada','Reemplazar','Baja']).optional(), cliente_id: numeroId, fecha_activacion: fecha, plan_nombre: texto(120), plan_vence: fecha, costo_mensual: entero, notas: texto(2000) }).strict();
 const licenciaSchema = z.object({ cliente_id: z.coerce.number().int().positive(), producto: z.string().trim().min(1).max(160), meses: mesesSchema, fecha_inicio: fechaRequerida, fecha_vence: fechaRequerida.optional(), incluye_sim: z.coerce.number().int().min(0).max(1).optional(), sim_id: numeroId, equipo_id: numeroId, precio: entero, pagada: z.coerce.number().int().min(0).max(1).optional(), anulada: z.coerce.number().int().min(0).max(1).optional(), notas: texto(2000) }).strict();
@@ -214,11 +216,11 @@ app.get('/clientes', async (c) => {
   const servidor=params.get('servidor_id');if(servidor!==null){const id=parsear(idSchema,servidor);if(!id)return c.json({error:'Filtro inválido',detalle:'El servidor debe ser un identificador positivo.'},400);condiciones.push('c.servidor_id = ?');valores.push(id)}
   const where=condiciones.length?`WHERE ${condiciones.join(' AND ')}`:'';const hoy=hoyEnBogota();
   const [lista,total]=await Promise.all([
-    c.env.DB.prepare(`SELECT c.id,c.nombre,c.nit,c.contacto,c.telefono,c.email,c.ciudad,c.direccion,c.servidor_id,s.nombre AS servidor,c.notas,c.activo,c.creado_en,c.actualizado_en,(SELECT COUNT(*) FROM equipos e WHERE e.cliente_id=c.id) AS equipos,(SELECT COUNT(*) FROM sims sm WHERE sm.cliente_id=c.id) AS sims,(SELECT MIN(l.fecha_vence) FROM licencias l WHERE l.cliente_id=c.id AND l.anulada=0 AND l.fecha_vence>=?) AS proximo_vencimiento FROM clientes c LEFT JOIN servidores s ON s.id=c.servidor_id ${where} ORDER BY c.nombre LIMIT ? OFFSET ?`).bind(hoy,...valores,limite,inicio).all<Datos>(),
+    c.env.DB.prepare(`SELECT c.id,c.nombre,c.nit,c.contacto,c.telefono,c.email,c.ciudad,c.direccion,c.responsable_comercial,c.servidor_id,s.nombre AS servidor,c.notas,c.activo,c.creado_en,c.actualizado_en,(SELECT COUNT(*) FROM equipos e WHERE e.cliente_id=c.id) AS equipos,(SELECT COUNT(*) FROM sims sm WHERE sm.cliente_id=c.id) AS sims,(SELECT MIN(l.fecha_vence) FROM licencias l WHERE l.cliente_id=c.id AND l.anulada=0 AND l.fecha_vence>=?) AS proximo_vencimiento FROM clientes c LEFT JOIN servidores s ON s.id=c.servidor_id ${where} ORDER BY c.nombre LIMIT ? OFFSET ?`).bind(hoy,...valores,limite,inicio).all<Datos>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS total FROM clientes c ${where}`).bind(...valores).first<{total:number}>(),
   ]);return c.json({datos:lista.results??[],pagina,limite,total:total?.total??0});
 });
-app.get('/clientes/:id', async (c) => { const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400); const dato = await obtener(c, 'clientes', id, 'id, nombre, nit, contacto, telefono, email, ciudad, direccion, servidor_id, notas, activo, creado_en, actualizado_en'); return dato ? c.json(dato) : c.json({ error: 'No encontrado', detalle: 'El cliente no existe.' }, 404); });
+app.get('/clientes/:id', async (c) => { const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400); const dato = await obtener(c, 'clientes', id, 'id, nombre, nit, contacto, telefono, email, ciudad, direccion, responsable_comercial, servidor_id, notas, activo, creado_en, actualizado_en'); return dato ? c.json(dato) : c.json({ error: 'No encontrado', detalle: 'El cliente no existe.' }, 404); });
 app.get('/clientes/:id/historial', async (c) => {
   const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400);
   const existe = await c.env.DB.prepare('SELECT id FROM clientes WHERE id = ?').bind(id).first<{ id: number }>();

@@ -3,6 +3,7 @@ import type { MouseEvent } from 'react';
 import EntityPage from './EntityPage';
 import Login from './Login';
 import type { UsuarioActivo } from './Login';
+import ImportarInventario from './ImportarInventario';
 
 type Resumen = Record<string, number>;
 const tarjetas = [
@@ -50,7 +51,7 @@ export default function App() {
   }
 
   const fechaHoy = new Intl.DateTimeFormat('es-CO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Bogota' }).format(new Date()).toLocaleUpperCase('es-CO');
-  const etiquetas: Record<string, string> = { inicio: 'Inicio', clientes: 'Clientes', equipos: 'Equipos', sims: 'SIM cards', licencias: 'Licencias', servidores: 'Servidores', bitacora: 'Bitácora' };
+  const etiquetas: Record<string, string> = { inicio: 'Inicio', clientes: 'Clientes', equipos: 'Equipos', sims: 'SIM cards', licencias: 'Licencias', servidores: 'Servidores', bitacora: 'Bitácora', importar: 'Carga masiva' };
   function navegar(event: MouseEvent<HTMLAnchorElement>, pagina: string) { event.preventDefault(); setValoresIniciales({}); setFiltrosIniciales({}); setSeccion(pagina); }
   function abrirPagina(pagina: string, valores: Record<string, unknown> = {}) { setValoresIniciales(valores); setFiltrosIniciales({}); setSeccion(pagina); }
   function abrirIndicador(clave: string) {
@@ -68,6 +69,7 @@ export default function App() {
         <a onClick={(e) => navegar(e, 'sims')} className={`nav-item ${seccion === 'sims' ? 'active' : ''}`} href="#sims"><span>▤</span>SIM cards</a>
         <a onClick={(e) => navegar(e, 'licencias')} className={`nav-item ${seccion === 'licencias' ? 'active' : ''}`} href="#licencias"><span>◷</span>Licencias</a>
         <a onClick={(e) => navegar(e, 'servidores')} className={`nav-item ${seccion === 'servidores' ? 'active' : ''}`} href="#servidores"><span>⌘</span>Servidores</a>
+        {rol !== 'lector' && <a onClick={(e) => navegar(e, 'importar')} className={`nav-item ${seccion === 'importar' ? 'active' : ''}`} href="#importar"><span>⇧</span>Carga masiva</a>}
         <a onClick={(e) => navegar(e, 'bitacora')} className={`nav-item ${seccion === 'bitacora' ? 'active' : ''}`} href="#bitacora"><span>≡</span>Bitácora</a>
       </nav>
       <div className="sidebar-bottom"><span className="avatar">{usuario.email.slice(0, 2).toUpperCase()}</span><span>{usuario.email}<small>{usuario.rol}</small></span><button className="logout-small" onClick={salir}>Salir</button></div>
@@ -75,7 +77,7 @@ export default function App() {
     <main className="main" id="inicio">
       <header className="topbar"><div className="crumb">Espacio de trabajo <span>/</span> <b>{etiquetas[seccion]}</b></div><div className="top-actions"><button aria-label="Buscar">⌕</button><button aria-label="Notificaciones">♧</button><button className="logout-button" onClick={salir}>Cerrar sesión</button></div></header>
       <section className="content">
-        {seccion !== 'inicio' ? <EntityPage key={seccion} section={seccion} rol={rol} initialValues={valoresIniciales} initialFilters={filtrosIniciales} clearInitial={() => setValoresIniciales({})} onNavigate={abrirPagina} /> : <>
+        {seccion === 'importar' ? <ImportarInventario /> : seccion !== 'inicio' ? <EntityPage key={seccion} section={seccion} rol={rol} initialValues={valoresIniciales} initialFilters={filtrosIniciales} clearInitial={() => setValoresIniciales({})} onNavigate={abrirPagina} /> : <>
         <div className="welcome"><div><div className="eyebrow">{fechaHoy}</div><h1>Resumen general</h1><p>El estado de tu operación, en un solo lugar.</p></div><button className="primary">＋ <span>Nuevo registro</span></button></div>
         {error && <div className="notice" role="alert"><span>ⓘ</span><div><b>No se pudo cargar la información</b><p>{error}</p></div></div>}
         <div className="section-head"><div><h2>Vista rápida</h2><span>Indicadores de tu operación</span></div><button className="range">Últimos 30 días <span>⌄</span></button></div>

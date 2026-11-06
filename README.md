@@ -6,7 +6,7 @@ Aplicación para PROEXCOM. La interfaz está en español de Colombia; se publica
 
 Pages está conectado al repositorio `comercialproexcom2020/Control-de-clientes`. El proyecto quedó configurado con `pnpm build`, salida `dist`, D1 de staging en implementaciones de vista previa y D1 de producción en `main`. La función de API está en `functions/api/[[path]].ts`.
 
-La migración `0002_autenticacion.sql` ya quedó aplicada en ambas D1. Falta provisionar la contraseña del admin y publicar la rama de vista previa. No se han cargado clientes, servidores, equipos, SIM ni licencias. La URL pública de Pages no debe usarse con datos reales hasta terminar esos pasos.
+La migración `0002_autenticacion.sql` ya está aplicada en ambas D1. No se han importado datos de clientes, servidores, equipos, SIM ni licencias. La migración `0003_responsable_comercial.sql` agrega el responsable comercial del cliente y debe aplicarse antes de desplegar esta versión.
 
 ## Requisitos
 
@@ -49,6 +49,12 @@ $contrasenaSegura.Dispose()
 ```
 
 El seed reactiva el correo como `admin` y reemplaza el hash por uno con salt aleatorio; nunca imprime la contraseña. La gestión visual para crear colaboradores y restablecer contraseñas llegará en una fase posterior.
+
+## Carga masiva de inventario
+
+En **Carga masiva**, guarda cada hoja de inventario de Excel como **CSV UTF-8** y carga uno o varios archivos. El nombre de cada archivo se usa como nombre del cliente; la pantalla pide el responsable comercial correspondiente. Cada radio necesita IMEI e IP/puerto. Los equipos se asocian con un servidor por la pareja **IP + puerto**, por lo que la misma IP con otro puerto crea otro servidor. ICCID y operador crean la SIM asociada al radio.
+
+La vista previa verifica IMEI e ICCID repetidos y relaciones con clientes y servidores existentes. No se guarda nada hasta pulsar **Importar**. El archivo se lee en el navegador; las columnas `User`, `Pass` y `BATERIA` se descartan y no se envían a la API.
 
 ## Pages, GitHub y despliegue
 

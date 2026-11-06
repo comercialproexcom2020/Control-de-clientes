@@ -27,7 +27,7 @@ async function pedir(ruta: string, opciones: RequestInit = {}, rol: Rol = 'admin
 describe('API principal', () => {
   let clienteId = 0;
   beforeAll(async () => {
-    const r = await pedir('/clientes', { method: 'POST', body: JSON.stringify({ nombre: `Cliente pruebas ${crypto.randomUUID()}` }) });
+    const r = await pedir('/clientes', { method: 'POST', body: JSON.stringify({ nombre: `Cliente pruebas ${crypto.randomUUID()}`, responsable_comercial: 'Asesor de pruebas' }) });
     expect(r.status).toBe(201);
     clienteId = Number((await r.json() as { id: number }).id);
   });
@@ -49,6 +49,27 @@ describe('API principal', () => {
     const { id } = await r.json() as { id: number };
     const registro = await testEnv.DB.prepare('SELECT COUNT(*) AS n FROM bitacora WHERE entidad = ? AND entidad_id = ?').bind('servidor', id).first<{ n: number }>();
     expect(registro?.n).toBe(1);
+  });
+
+  it('previsualiza e importa inventario agrupando servidores por IP y puerto', async () => {
+    const sufijo = crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+    const cliente = `Cliente carga ${sufijo}`;
+    const registros = [
+      { archivo: 'Cliente A.csv', fila: 3, cliente, responsable_comercial: 'Asesora A', host: '198.51.100.40', puerto: '10001', nombre: 'Radio A', operador: 'Claro', iccid: `8957${sufijo}`, imei: `86${sufijo}`, marca: 'Marca', modelo: 'Modelo', serial: 'SER-A', fecha_activacion: '2026-10-01', fecha_envio: null, notas: null },
+      { archivo: 'Cliente A.csv', fila: 4, cliente, responsable_comercial: 'Asesora A', host: '198.51.100.40', puerto: '10002', nombre: 'Radio B', operador: null, iccid: null, imei: `87${sufijo}`, marca: 'Marca', modelo: 'Modelo', serial: 'SER-B', fecha_activacion: null, fecha_envio: null, notas: null },
+    ];
+    const previa = await pedir('/importar/inventario/previsualizar', { method: 'POST', body: JSON.stringify({ registros }) }, 'editor');
+    expect(previa.status, await previa.clone().text()).toBe(200);
+    expect(await previa.json()).toMatchObject({ puede_importar: true, resumen: { clientes: 1, servidores: 2, equipos: 2, sims: 1 } });
+
+    const importacion = await pedir('/importar/inventario', { method: 'POST', body: JSON.stringify({ registros }) }, 'editor');
+    expect(importacion.status).toBe(201);
+    const clienteGuardado = await testEnv.DB.prepare('SELECT responsable_comercial FROM clientes WHERE nombre = ?').bind(cliente).first<{ responsable_comercial: string }>();
+    expect(clienteGuardado?.responsable_comercial).toBe('Asesora A');
+    const puertos = await testEnv.DB.prepare('SELECT COUNT(DISTINCT s.puerto) AS total FROM equipos e JOIN servidores s ON s.id=e.servidor_id WHERE e.cliente_id=(SELECT id FROM clientes WHERE nombre=?)').bind(cliente).first<{ total: number }>();
+    expect(puertos?.total).toBe(2);
+    const sims = await testEnv.DB.prepare('SELECT COUNT(*) AS total FROM sims WHERE cliente_id=(SELECT id FROM clientes WHERE nombre=?) AND estado=?').bind(cliente, 'En uso').first<{ total: number }>();
+    expect(sims?.total).toBe(1);
   });
 
   it('asigna SIM de inventario, completa el cliente y rechaza SIM dañada', async () => {

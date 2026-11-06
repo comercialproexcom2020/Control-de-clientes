@@ -9,10 +9,10 @@ const configuraciones: Record<string, Config> = {
   clientes: {
     endpoint: '/clientes', title: 'Clientes', description: 'Gestiona los datos y el servidor por defecto de cada cliente.',
     fields: [
-      { key: 'nombre', label: 'Nombre del cliente', required: true }, { key: 'nit', label: 'NIT' }, { key: 'contacto', label: 'Persona de contacto' },
+      { key: 'nombre', label: 'Nombre del cliente', required: true }, { key: 'responsable_comercial', label: 'Responsable comercial', required: true }, { key: 'nit', label: 'NIT' }, { key: 'contacto', label: 'Persona de contacto' },
       { key: 'telefono', label: 'Teléfono', type: 'text' }, { key: 'email', label: 'Correo electrónico', type: 'email' }, { key: 'ciudad', label: 'Ciudad' },
       { key: 'servidor_id', label: 'Servidor por defecto', type: 'select', source: { url: '/servidores', label: 'nombre', value: 'id' } }, { key: 'activo', label: 'Estado', type: 'select', options: ['Activo','Inactivo'] }, { key: 'notas', label: 'Notas' },
-    ], filters: [{ key: 'activo', label: 'Estado', type: 'select', options: ['1','0'] }], columns: [{ key: 'nombre', label: 'Cliente' }, { key: 'contacto', label: 'Contacto' }, { key: 'telefono', label: 'Teléfono' }, { key: 'servidor', label: 'Servidor por defecto' }, { key: 'equipos', label: 'Equipos' }, { key: 'sims', label: 'SIM' }, { key: 'proximo_vencimiento', label: 'Próximo vencimiento' }, { key: 'activo', label: 'Estado' }],
+    ], filters: [{ key: 'activo', label: 'Estado', type: 'select', options: ['1','0'] }], columns: [{ key: 'nombre', label: 'Cliente' }, { key: 'responsable_comercial', label: 'Responsable comercial' }, { key: 'contacto', label: 'Contacto' }, { key: 'telefono', label: 'Teléfono' }, { key: 'servidor', label: 'Servidor por defecto' }, { key: 'equipos', label: 'Equipos' }, { key: 'sims', label: 'SIM' }, { key: 'proximo_vencimiento', label: 'Próximo vencimiento' }, { key: 'activo', label: 'Estado' }],
   },
   servidores: {
     endpoint: '/servidores', title: 'Servidores', description: 'Controla los hosts y puertos a los que se conectan los equipos.',
