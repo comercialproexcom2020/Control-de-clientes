@@ -61,7 +61,7 @@ export default function App() {
   }
   return <div className="shell">
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark">P</span><span>PROEXCOM<small>CONTROL OPERATIVO</small></span></div>
+      <div className="brand"><span className="brand-mark">C</span><span>CONTROL PERSONAL<small>GESTIÓN DE CLIENTES</small></span></div>
       <nav aria-label="Navegación principal">
         <a onClick={(e) => navegar(e, 'inicio')} className={`nav-item ${seccion === 'inicio' ? 'active' : ''}`} href="#inicio"><span>⌂</span>Inicio</a>
         <a onClick={(e) => navegar(e, 'clientes')} className={`nav-item ${seccion === 'clientes' ? 'active' : ''}`} href="#clientes"><span>◉</span>Clientes</a>
@@ -83,7 +83,7 @@ export default function App() {
         <div className="section-head"><div><h2>Vista rápida</h2><span>Indicadores de tu operación</span></div><button className="range">Últimos 30 días <span>⌄</span></button></div>
         <div className="cards">{tarjetas.map(([label, key, icon], i) => <article className={`stat-card card-${i} clickable`} key={key} role="button" tabIndex={0} onClick={() => abrirIndicador(key)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') abrirIndicador(key); }}><div className="stat-top"><span>{label}</span><span className="stat-icon">{icon}</span></div><strong>{resumen?.[key] ?? '—'}</strong><div className="stat-foot">{resumen ? 'Ver registros' : 'Esperando conexión'}</div></article>)}</div>
         <div className="lower-grid"><section className="panel"><div className="panel-head"><div><h2>Próximos vencimientos</h2><span>Licencias que requieren seguimiento</span></div><a href="#licencias">Ver todas <span>→</span></a></div><div className="empty"><span className="empty-icon">◷</span><b>Tu lista aparecerá aquí</b><p>Agrega clientes y licencias para llevar el control de renovaciones.</p></div></section><section className="panel activity"><div className="panel-head"><div><h2>Actividad reciente</h2><span>Últimos movimientos registrados</span></div><a href="#bitacora">Bitácora <span>→</span></a></div><div className="empty"><span className="empty-icon">≡</span><b>Aún no hay movimientos</b><p>Los cambios de tu equipo quedarán registrados aquí.</p></div></section></div>
-        <footer>Control de clientes <span>·</span> PROEXCOM</footer>
+        <footer>Control de clientes</footer>
         </>}
       </section>
     </main>

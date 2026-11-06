@@ -32,7 +32,7 @@ export default function Login({ onLogin }: { onLogin: (usuario: UsuarioActivo) =
 
   return <main className="login-shell">
     <section className="login-card" aria-labelledby="titulo-login">
-      <div className="login-brand"><span className="brand-mark">P</span><span>PROEXCOM<small>CONTROL OPERATIVO</small></span></div>
+      <div className="login-brand"><span className="brand-mark">C</span><span>CONTROL PERSONAL<small>GESTIÓN DE CLIENTES</small></span></div>
       <h1 id="titulo-login">Iniciar sesión</h1>
       <p>Ingresa con el correo habilitado para Control de clientes.</p>
       <form onSubmit={entrar}>

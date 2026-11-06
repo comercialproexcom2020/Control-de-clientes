@@ -1,6 +1,6 @@
 # Control de clientes, equipos, SIM y licencias
 
-Aplicación para PROEXCOM. La interfaz está en español de Colombia; se publica en Cloudflare Pages y la API corre en Pages Functions con D1. El acceso usa contraseña propia y no depende de Cloudflare Zero Trust/Access.
+Aplicación personal para gestionar clientes, equipos, SIM y licencias. La interfaz está en español de Colombia; se publica en Cloudflare Pages y la API corre en Pages Functions con D1. El acceso usa contraseña propia y no depende de Cloudflare Zero Trust/Access.
 
 ## Estado
 
