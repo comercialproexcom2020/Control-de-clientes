@@ -52,7 +52,7 @@ El seed reactiva el correo como `admin` y reemplaza el hash por uno con salt ale
 
 ## Carga masiva de inventario
 
-En **Carga masiva**, guarda cada hoja de inventario de Excel como **CSV UTF-8** y carga uno o varios archivos. El nombre de cada archivo se usa como nombre del cliente; la pantalla pide el responsable comercial correspondiente. Cada radio necesita IMEI e IP/puerto. Los equipos se asocian con un servidor por la pareja **IP + puerto**, por lo que la misma IP con otro puerto crea otro servidor. ICCID y operador crean la SIM asociada al radio.
+En **Carga masiva**, descarga la plantilla CSV, ábrela en Excel y completa una fila por radio. Incluye cliente y responsable comercial en cada fila. También admite exportaciones existentes como **CSV UTF-8**; si el archivo no tiene columnas de cliente y responsable, el nombre del archivo identifica al cliente y la pantalla pide el responsable. Cada radio necesita IMEI e IP/puerto. Los equipos se asocian con un servidor por la pareja **IP + puerto**, por lo que la misma IP con otro puerto crea otro servidor. ICCID y operador crean la SIM asociada al radio.
 
 La vista previa verifica IMEI e ICCID repetidos y relaciones con clientes y servidores existentes. No se guarda nada hasta pulsar **Importar**. El archivo se lee en el navegador; las columnas `User`, `Pass` y `BATERIA` se descartan y no se envían a la API.
 

@@ -323,7 +323,7 @@ La app solo **copia** el texto o abre `https://wa.me/57{telefono}?text=...`. No 
 
 ## 9. Importación y exportación
 
-- **Importar inventario desde CSV UTF-8:** un archivo por cliente. Mostrar **vista previa** con errores por fila (IMEI/ICCID duplicado, operador o fecha inválidos) antes de confirmar. Nada se guarda hasta confirmar. Asociar clientes a un responsable comercial; agrupar servidores por la pareja `host + puerto`, y enlazar equipo y SIM de cada fila. Ignorar credenciales de acceso y datos no modelados. Registrar una sola entrada de bitácora resumen.
+- **Importar inventario desde plantilla CSV UTF-8 descargable:** una fila por radio con cliente, responsable comercial, IP, puerto, alias, operador, ICCID, IMEI, marca, modelo, serial, fechas y observaciones. Mostrar **vista previa** con errores por fila (IMEI/ICCID duplicado, operador o fecha inválidos) antes de confirmar. Nada se guarda hasta confirmar. Agrupar servidores por la pareja `host + puerto`, y enlazar equipo y SIM de cada fila. Ignorar credenciales de acceso y datos no modelados. Registrar una sola entrada de bitácora resumen.
 - **Exportar a Excel (.xlsx):** una hoja por tabla (servidores, clientes, equipos, SIM, licencias, renovaciones, bitácora). El admin ve precios; los demás roles, no.
 - **Reporte por cliente:** página HTML con estilos de impresión (Imprimir → PDF) con datos del cliente, equipos con su SIM y su `servidor:puerto`, licencias y vencimientos.
 
