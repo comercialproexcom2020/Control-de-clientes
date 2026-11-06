@@ -6,8 +6,6 @@
   "scripts": {
     "dev": "concurrently -k \"vite --host 0.0.0.0\" \"wrangler dev --port 8787\"",
     "build": "vite build",
-    "deploy:staging": "npm run build && wrangler deploy --env staging",
-    "deploy:production": "npm run build && wrangler deploy --env production",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "lint": "eslint .",
     "test": "vitest run",

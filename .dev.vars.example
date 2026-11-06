@@ -1,3 +1,3 @@
-ACCESS_TEAM_DOMAIN="https://your-team.cloudflareaccess.com"
-ACCESS_AUD=""
-FIRST_ADMIN_EMAIL=""
+# No se requieren secretos para la autenticación del Worker.
+# FIRST_ADMIN_EMAIL y FIRST_ADMIN_PASSWORD se usan solo al ejecutar scripts/seed-admin.mjs.
+# Configúralos en la sesión de PowerShell; nunca guardes la contraseña aquí.

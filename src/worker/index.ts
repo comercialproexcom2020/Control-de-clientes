@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { autenticar, usuarioActual, type AuthEnv } from './auth';
+import { z } from 'zod';
+import { autenticar, cerrarSesion, iniciarSesion, origenPropio, usuarioActual, type AuthEnv } from './auth';
 import { hoyEnBogota, sumarDiasCalendario } from './fechas';
 import rutas from './rutas';
 import type { Env } from './env';
@@ -13,11 +14,25 @@ app.use('*', async (c, next) => {
   c.header('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()');
   c.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'");
 });
+const inicioSesionSchema = z.object({ email: z.email().max(254), password: z.string().min(16).max(128) }).strict();
+
+app.post('/api/sesion', async (c) => {
+  if (!origenPropio(c)) return c.json({ error: 'Solicitud bloqueada', detalle: 'El origen de la solicitud no es válido.' }, 403);
+  const cuerpo = inicioSesionSchema.safeParse(await c.req.json().catch(() => null));
+  if (!cuerpo.success) return c.json({ error: 'Datos inválidos', detalle: 'Ingresa un correo válido y una contraseña de al menos 16 caracteres.' }, 400);
+  return iniciarSesion(c, cuerpo.data.email, cuerpo.data.password);
+});
+app.delete('/api/sesion', async (c) => {
+  if (!origenPropio(c)) return c.json({ error: 'Solicitud bloqueada', detalle: 'El origen de la solicitud no es válido.' }, 403);
+  return cerrarSesion(c);
+});
+
 app.use('/api/*', autenticar);
 app.get('/api/health', (c) => c.json({ estado: 'ok' }));
 app.route('/api', rutas);
 
 app.get('/api/yo', (c) => c.json({ usuario: usuarioActual(c) }));
+app.get('/api/sesion', (c) => c.json({ usuario: usuarioActual(c) }, 200, { 'Cache-Control': 'no-store' }));
 app.get('/api/resumen', async (c) => {
   const hoy = hoyEnBogota();
   const limite = sumarDiasCalendario(hoy, 30);

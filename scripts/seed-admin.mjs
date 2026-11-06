@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { pbkdf2Sync, randomBytes } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -11,12 +12,19 @@ const baseDatos = {
 if (!baseDatos) throw new Error('Destino inválido. Usa local, staging o production.');
 
 const email = process.env.FIRST_ADMIN_EMAIL?.trim().toLowerCase();
+const password = process.env.FIRST_ADMIN_PASSWORD;
 if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
   throw new Error('Define FIRST_ADMIN_EMAIL con un correo válido antes de ejecutar el seed.');
 }
+if (!password || password.length < 16 || password.length > 128) {
+  throw new Error('Define FIRST_ADMIN_PASSWORD con una contraseña de 16 a 128 caracteres. No la guardes en el repositorio.');
+}
 
 const valor = email.replaceAll("'", "''");
-const sql = `INSERT INTO usuarios (email, rol, activo) VALUES ('${valor}', 'admin', 1) ON CONFLICT(email) DO UPDATE SET rol = 'admin', activo = 1;`;
+const sal = randomBytes(16);
+const derivado = pbkdf2Sync(password, sal, 100_000, 32, 'sha256');
+const hash = `pbkdf2-sha256$100000$${sal.toString('base64url')}$${derivado.toString('base64url')}`;
+const sql = `INSERT INTO usuarios (email, rol, activo, password_hash) VALUES ('${valor}', 'admin', 1, '${hash}') ON CONFLICT(email) DO UPDATE SET rol = 'admin', activo = 1, password_hash = excluded.password_hash;`;
 const raiz = dirname(dirname(fileURLToPath(import.meta.url)));
 const wrangler = join(raiz, 'node_modules', 'wrangler', 'bin', 'wrangler.js');
 const args = ['d1', 'execute', baseDatos[0], ...baseDatos[1], '--command', sql];

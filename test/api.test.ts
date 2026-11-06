@@ -32,7 +32,7 @@ describe('API principal', () => {
     clienteId = Number((await r.json() as { id: number }).id);
   });
 
-  it('exige el JWT de Cloudflare Access en las rutas del Worker', async () => {
+  it('exige una sesión iniciada en las rutas del Worker', async () => {
     const response = await worker.fetch(new Request('https://app.test/api/resumen'), testEnv, {} as ExecutionContext);
     expect(response.status).toBe(401);
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
