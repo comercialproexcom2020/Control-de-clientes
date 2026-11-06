@@ -93,7 +93,7 @@ describe('API principal', () => {
   });
 
   it('calcula vencimiento, renueva desde hoy si venció y conserva historial', async () => {
-    const creada = await pedir('/licencias', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, producto: 'Plan de prueba', meses: 1, fecha_inicio: '2026-01-31', fecha_vence: '2026-02-28' }) });
+    const creada = await pedir('/licencias', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, proveedor: 'Next-PoC', producto: 'Plan de prueba', meses: 1, fecha_inicio: '2026-01-31', fecha_vence: '2026-02-28' }) });
     expect(creada.status).toBe(201);
     const id = Number((await creada.json() as { id: number }).id);
     const hoy = hoyEnBogota();
@@ -118,7 +118,7 @@ describe('API principal', () => {
   });
 
   it('omite precio y pago de licencias para lectores y editores', async () => {
-    const creada = await pedir('/licencias', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, producto: 'Licencia con precio', meses: 6, fecha_inicio: '2026-11-05', precio: 245000, pagada: 1 }) });
+    const creada = await pedir('/licencias', { method: 'POST', body: JSON.stringify({ cliente_id: clienteId, proveedor: 'Hytera', producto: 'Licencia con precio', meses: 6, fecha_inicio: '2026-11-05', precio: 245000, pagada: 1 }) });
     const id = Number((await creada.json() as { id: number }).id);
     const detalle = await pedir(`/licencias/${id}`, {}, 'editor');
     const datos = await detalle.json() as Record<string, unknown>;

@@ -21,11 +21,11 @@ const servidorSchema = z.object({ nombre: z.string().trim().min(1).max(120), hos
 const clienteSchema = z.object({ nombre: z.string().trim().min(1).max(160), nit: texto(40), contacto: texto(160), telefono: texto(40), email: z.union([z.email(), z.literal('')]).nullable().optional(), ciudad: texto(100), direccion: texto(240), responsable_comercial: z.string().trim().min(1).max(160), servidor_id: numeroId, notas: texto(2000), activo: z.coerce.number().int().min(0).max(1).optional() }).strict();
 const equipoSchema = z.object({ cliente_id: numeroId, nombre: texto(80), marca: texto(100), modelo: texto(100), imei: texto(40), serial: texto(80), estado: z.enum(['Activo','En bodega','Dañado','Reemplazar','Baja']).optional(), fecha_envio: fecha, servidor_id: numeroId, notas: texto(2000) }).strict();
 const simSchema = z.object({ iccid: z.string().trim().min(5).max(30), operador: z.enum(['Tigo','Claro','Movistar']).nullable().optional(), numero_linea: texto(40), estado: z.enum(['Inventario','En uso','Dañada','Reemplazar','Baja']).optional(), cliente_id: numeroId, fecha_activacion: fecha, plan_nombre: texto(120), plan_vence: fecha, costo_mensual: entero, notas: texto(2000) }).strict();
-const licenciaSchema = z.object({ cliente_id: z.coerce.number().int().positive(), producto: z.string().trim().min(1).max(160), meses: mesesSchema, fecha_inicio: fechaRequerida, fecha_vence: fechaRequerida.optional(), incluye_sim: z.coerce.number().int().min(0).max(1).optional(), sim_id: numeroId, equipo_id: numeroId, precio: entero, pagada: z.coerce.number().int().min(0).max(1).optional(), anulada: z.coerce.number().int().min(0).max(1).optional(), notas: texto(2000) }).strict();
+const licenciaSchema = z.object({ cliente_id: z.coerce.number().int().positive(), proveedor: z.enum(['Next-PoC','Hytera']), producto: z.string().trim().min(1).max(160).optional(), meses: mesesSchema, fecha_inicio: fechaRequerida, fecha_vence: fechaRequerida.optional(), incluye_sim: z.coerce.number().int().min(0).max(1).optional(), sim_id: numeroId, equipo_id: numeroId, precio: entero, pagada: z.coerce.number().int().min(0).max(1).optional(), anulada: z.coerce.number().int().min(0).max(1).optional(), notas: texto(2000) }).strict();
 
 type Datos = Record<string, unknown>;
 const camposFinancieros = new Set(['precio', 'pagada', 'costo_mensual']);
-const rotulos: Record<string, string> = { nombre: 'Nombre', host: 'Host', puerto: 'Puerto', servidor_id: 'Servidor', cliente_id: 'Cliente', estado: 'Estado', equipo_id: 'Equipo', operador: 'Operador', producto: 'Producto', meses: 'Duración', fecha_inicio: 'Inicio', fecha_vence: 'Vencimiento', fecha_envio: 'Fecha de envío', incluye_sim: 'Incluye SIM', serial: 'Serial', imei: 'IMEI', iccid: 'ICCID', plan_vence: 'Vencimiento del plan' };
+const rotulos: Record<string, string> = { nombre: 'Nombre', host: 'Host', puerto: 'Puerto', servidor_id: 'Servidor', cliente_id: 'Cliente', estado: 'Estado', equipo_id: 'Equipo', operador: 'Operador', proveedor: 'Proveedor', producto: 'Producto', meses: 'Duración', fecha_inicio: 'Inicio', fecha_vence: 'Vencimiento', fecha_envio: 'Fecha de envío', incluye_sim: 'Incluye SIM', serial: 'Serial', imei: 'IMEI', iccid: 'ICCID', plan_vence: 'Vencimiento del plan' };
 
 function parsear<T>(schema: z.ZodType<T>, datos: unknown): T | null {
   const parsed = schema.safeParse(datos);
@@ -312,7 +312,7 @@ app.patch('/sims/:id', soloEscritura, async (c) => { const id = idRuta(c); retur
 app.get('/licencias', async (c) => {
   const { pagina, limite, inicio, q } = listaParams(new URL(c.req.url));
   const usuario = usuarioActual(c); const condiciones: string[] = []; const valores: unknown[] = [];
-  if (q) { condiciones.push('(l.producto LIKE ? OR c.nombre LIKE ?)'); valores.push(`%${q}%`, `%${q}%`); }
+  if (q) { condiciones.push('(l.proveedor LIKE ? OR l.producto LIKE ? OR c.nombre LIKE ?)'); valores.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   const estado = new URL(c.req.url).searchParams.get('estado');
   const clienteId = new URL(c.req.url).searchParams.get('cliente_id');
   if (clienteId !== null) { const parsedId = parsear(idSchema, clienteId); if (!parsedId) return c.json({ error: 'Filtro inválido', detalle: 'El cliente debe ser un identificador positivo.' }, 400); condiciones.push('l.cliente_id = ?'); valores.push(parsedId); }
@@ -330,7 +330,7 @@ app.get('/licencias', async (c) => {
   const filtro = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
   const camposAdmin = usuario.rol === 'admin' ? ', l.precio, l.pagada' : '';
   const [lista, total] = await Promise.all([
-    c.env.DB.prepare(`SELECT l.id, l.cliente_id, c.nombre AS cliente, l.producto, l.meses, l.fecha_inicio, l.fecha_vence, l.incluye_sim, l.sim_id, l.equipo_id, l.anulada, l.notas${camposAdmin}, l.creado_en, l.actualizado_en FROM licencias l JOIN clientes c ON c.id = l.cliente_id ${filtro} ORDER BY l.fecha_vence ASC LIMIT ? OFFSET ?`).bind(...valores, limite, inicio).all<Datos>(),
+    c.env.DB.prepare(`SELECT l.id, l.cliente_id, c.nombre AS cliente, l.proveedor, l.producto, l.meses, l.fecha_inicio, l.fecha_vence, l.incluye_sim, l.sim_id, l.equipo_id, l.anulada, l.notas${camposAdmin}, l.creado_en, l.actualizado_en FROM licencias l JOIN clientes c ON c.id = l.cliente_id ${filtro} ORDER BY l.fecha_vence ASC LIMIT ? OFFSET ?`).bind(...valores, limite, inicio).all<Datos>(),
     c.env.DB.prepare(`SELECT COUNT(*) AS total FROM licencias l JOIN clientes c ON c.id = l.cliente_id ${filtro}`).bind(...valores).first<{ total: number }>(),
   ]);
   const hoy = hoyEnBogota();
@@ -342,7 +342,7 @@ app.get('/licencias', async (c) => {
 app.get('/licencias/:id', async (c) => {
   const id = idRuta(c); if (!id) return c.json({ error: 'Solicitud inválida', detalle: 'El identificador no es válido.' }, 400);
   const usuario = usuarioActual(c); const finanzas = usuario.rol === 'admin' ? ', precio, pagada' : '';
-  const licencia = await c.env.DB.prepare(`SELECT id, cliente_id, producto, meses, fecha_inicio, fecha_vence, incluye_sim, sim_id, equipo_id, anulada, notas${finanzas}, creado_en, actualizado_en FROM licencias WHERE id = ?`).bind(id).first<Datos>();
+  const licencia = await c.env.DB.prepare(`SELECT id, cliente_id, proveedor, producto, meses, fecha_inicio, fecha_vence, incluye_sim, sim_id, equipo_id, anulada, notas${finanzas}, creado_en, actualizado_en FROM licencias WHERE id = ?`).bind(id).first<Datos>();
   if (!licencia) return c.json({ error: 'No encontrado', detalle: 'La licencia no existe.' }, 404);
   const renovaciones = await c.env.DB.prepare(`SELECT id, licencia_id, fecha, meses, desde, vence${finanzas}, notas, usuario FROM renovaciones WHERE licencia_id = ? ORDER BY fecha DESC, id DESC`).bind(id).all<Datos>();
   const cfg = await c.env.DB.prepare("SELECT valor FROM config WHERE clave = 'dias_alerta_licencia'").first<{ valor: string }>();
@@ -350,9 +350,9 @@ app.get('/licencias/:id', async (c) => {
   return c.json({ ...licencia, estado: estadoLicencia(String(licencia.fecha_vence), Boolean(licencia.anulada), hoyEnBogota(), diasAlerta), renovaciones: renovaciones.results ?? [] });
 });
 app.post('/licencias', soloEscritura, async (c) => {
-  const datos = parsear(licenciaSchema, await c.req.json()); if (!datos) return c.json({ error: 'Datos inválidos', detalle: 'Revisa cliente, producto, duración y fecha de inicio.' }, 400);
+  const datos = parsear(licenciaSchema, await c.req.json()); if (!datos) return c.json({ error: 'Datos inválidos', detalle: 'Revisa cliente, proveedor, duración y fecha de inicio.' }, 400);
   const calculada = sumarMesesCalendario(datos.fecha_inicio, datos.meses);
-  const nuevo = { ...datos, fecha_vence: datos.fecha_vence ?? calculada };
+  const nuevo = { ...datos, producto: datos.producto ?? 'Licencia PoC', fecha_vence: datos.fecha_vence ?? calculada };
   const result = await crear(c, 'licencias', 'licencia', licenciaSchema.extend({ fecha_vence: z.string() }) as z.ZodType<Datos>, nuevo);
   return result;
 });
